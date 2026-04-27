@@ -1,0 +1,36 @@
+name: Windows RDP
+on:
+  workflow_dispatch:
+  
+jobs:
+  rdp:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+      
+    - name: Enable RDP
+      run: |
+        Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+        netsh advfirewall firewall add rule name="Allow RDP" dir=in action=allow protocol=TCP localport=3389
+        
+    - name: Setup RDP Password
+      run: |
+        $password = ConvertTo-SecureString "runneradmin" -AsPlainText -Force
+        $user = ".\runneradmin"
+        New-LocalUser -Name "rdpuser" -Password $password -FullName "RDP User" -Description "RDP Access"
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "rdpuser"
+        
+    - name: Install ngrok
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Expand-Archive ngrok.zip -DestinationPath C:\
+        C:\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        
+    - name: Start ngrok tunnel
+      run: Start-Process -FilePath "C:\ngrok.exe" -ArgumentList "tcp", "3389", "--log=stdout" -NoNewWindow
+      shell: cmd
+      
+    - name: Show connection info
+      run: |
+        Start-Sleep 10
+        C:\ngrok.exe tcp 3389
